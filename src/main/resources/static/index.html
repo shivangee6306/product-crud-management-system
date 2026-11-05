@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product Management System</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #f2f4f8; margin: 0; padding: 20px; color: #222; }
+  h1 { text-align: center; color: #2c3e70; margin-bottom: 20px; }
+  .container { max-width: 1000px; margin: auto; }
+  .card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,.1); }
+  .card h2 { margin-top: 0; font-size: 18px; color: #2c3e70; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  label { font-size: 13px; font-weight: bold; display: block; margin-bottom: 4px; }
+  input { width: 100%; padding: 8px; border: 1px solid #bbb; border-radius: 4px; font-size: 14px; }
+  .full { grid-column: 1 / -1; }
+  button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; color: #fff; }
+  .btn-save { background: #2e8b57; }
+  .btn-clear { background: #777; }
+  .btn-edit { background: #f0a500; padding: 5px 10px; }
+  .btn-del { background: #d9534f; padding: 5px 10px; }
+  .btn-search { background: #2c3e70; }
+  .actions { margin-top: 14px; display: flex; gap: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+  th { background: #2c3e70; color: #fff; }
+  tr:hover td { background: #f6f8fc; }
+  .msg { padding: 10px; border-radius: 4px; margin-bottom: 15px; display: none; }
+  .msg.ok { background: #d4edda; color: #155724; display: block; }
+  .msg.err { background: #f8d7da; color: #721c24; display: block; }
+  .search-row { display: flex; gap: 10px; margin-bottom: 12px; }
+  .empty { text-align: center; color: #888; padding: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Product Management System</h1>
+
+  <div id="msg" class="msg"></div>
+
+  <!-- ===== FORM ===== -->
+  <div class="card">
+    <h2 id="formTitle">Add New Product</h2>
+    <input type="hidden" id="productId">
+    <div class="grid">
+      <div>
+        <label>Product Name *</label>
+        <input type="text" id="name" maxlength="100" placeholder="e.g. Laptop">
+      </div>
+      <div>
+        <label>Category *</label>
+        <input type="text" id="category" maxlength="50" placeholder="e.g. Electronics">
+      </div>
+      <div>
+        <label>Price (₹) *</label>
+        <input type="number" id="price" min="0" step="0.01" placeholder="e.g. 45000">
+      </div>
+      <div>
+        <label>Quantity *</label>
+        <input type="number" id="quantity" min="0" step="1" placeholder="e.g. 10">
+      </div>
+      <div class="full">
+        <label>Description</label>
+        <input type="text" id="description" maxlength="255" placeholder="Optional">
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-save" id="saveBtn" onclick="saveProduct()">Save</button>
+      <button class="btn-clear" onclick="clearForm()">Clear</button>
+    </div>
+  </div>
+
+  <!-- ===== LIST ===== -->
+  <div class="card">
+    <h2>Product List</h2>
+    <div class="search-row">
+      <input type="text" id="searchBox" placeholder="Name ya category se search karo..." onkeydown="if(event.key==='Enter') loadProducts()">
+      <button class="btn-search" onclick="loadProducts()">Search</button>
+      <button class="btn-clear" onclick="document.getElementById('searchBox').value=''; loadProducts()">Reset</button>
+    </div>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Name</th><th>Category</th><th>Price</th><th>Qty</th><th>Description</th><th>Action</th></tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const API = '/api/products';
+
+  function showMsg(text, type) {
+    const m = document.getElementById('msg');
+    m.textContent = text;
+    m.className = 'msg ' + type;
+    setTimeout(() => { m.className = 'msg'; }, 3500);
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- READ ----------
+  async function loadProducts() {
+    const search = document.getElementById('searchBox').value.trim();
+    const url = search ? API + '?search=' + encodeURIComponent(search) : API;
+    try {
+      const res = await fetch(url);
+      const list = await res.json();
+      const body = document.getElementById('tableBody');
+      if (list.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" class="empty">Koi product nahi mila</td></tr>';
+        return;
+      }
+      body.innerHTML = list.map(p => `
+        <tr>
+          <td>${p.id}</td>
+          <td>${esc(p.name)}</td>
+          <td>${esc(p.category)}</td>
+          <td>₹ ${Number(p.price).toFixed(2)}</td>
+          <td>${p.quantity}</td>
+          <td>${esc(p.description)}</td>
+          <td>
+            <button class="btn-edit" onclick="editProduct(${p.id})">Edit</button>
+            <button class="btn-del" onclick="deleteProduct(${p.id})">Delete</button>
+          </td>
+        </tr>`).join('');
+    } catch (e) {
+      showMsg('Server se data nahi aa raha. Backend chal raha hai?', 'err');
+    }
+  }
+
+  // ---------- CREATE / UPDATE ----------
+  async function saveProduct() {
+    const id = document.getElementById('productId').value;
+    const product = {
+      name: document.getElementById('name').value.trim(),
+      category: document.getElementById('category').value.trim(),
+      price: document.getElementById('price').value,
+      quantity: document.getElementById('quantity').value,
+      description: document.getElementById('description').value.trim()
+    };
+
+    if (!product.name) return showMsg('Product name daalo', 'err');
+    if (!product.category) return showMsg('Category daalo', 'err');
+    if (!product.price || Number(product.price) <= 0) return showMsg('Price 0 se zyada honi chahiye', 'err');
+    if (product.quantity === '' || Number(product.quantity) < 0) return showMsg('Quantity sahi daalo', 'err');
+
+    product.price = Number(product.price);
+    product.quantity = parseInt(product.quantity, 10);
+
+    try {
+      const res = await fetch(id ? API + '/' + id : API, {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(product)
+      });
+      const data = await res.json();
+      if (!res.ok) return showMsg(data.message || 'Save nahi hua', 'err');
+
+      showMsg(id ? 'Product update ho gaya!' : 'Product saved successfully!', 'ok');
+      clearForm();
+      loadProducts();
+    } catch (e) {
+      showMsg('Server error aaya', 'err');
+    }
+  }
+
+  // ---------- Edit (form me data bharo) ----------
+  async function editProduct(id) {
+    const res = await fetch(API + '/' + id);
+    const p = await res.json();
+    document.getElementById('productId').value = p.id;
+    document.getElementById('name').value = p.name;
+    document.getElementById('category').value = p.category;
+    document.getElementById('price').value = p.price;
+    document.getElementById('quantity').value = p.quantity;
+    document.getElementById('description').value = p.description || '';
+    document.getElementById('formTitle').textContent = 'Edit Product (ID: ' + p.id + ')';
+    document.getElementById('saveBtn').textContent = 'Update';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ---------- DELETE ----------
+  async function deleteProduct(id) {
+    if (!confirm('Kya aap sach me ye product delete karna chahte ho?')) return;
+    const res = await fetch(API + '/' + id, { method: 'DELETE' });
+    const data = await res.json();
+    showMsg(data.message, res.ok ? 'ok' : 'err');
+    loadProducts();
+  }
+
+  function clearForm() {
+    ['productId', 'name', 'category', 'price', 'quantity', 'description']
+      .forEach(i => document.getElementById(i).value = '');
+    document.getElementById('formTitle').textContent = 'Add New Product';
+    document.getElementById('saveBtn').textContent = 'Save';
+  }
+
+  loadProducts();
+</script>
+</body>
+</html>
